@@ -82,8 +82,11 @@ Usage: utgen gen [OPTIONS] --project-dir <PROJECT_DIR>
 Options:
   -p, --project-dir <PROJECT_DIR>  Path to the project directory, can be relative to the current directory
   -w, --work-dir <WORK_DIR>        Path to the work directory(s), separated by commas (e.g., dir1,dir2), can be relative to the project directory, default to the project directory
+  -t, --tasks <TASKS>              Number of parallel test generation tasks [default: 128]
   -i, --integration                Whether to generate integration tests
-  -h, --help                       Print help
+  -r, --requirement                Whether to provide requirements in prompt
+  -c, --context                    Whether to provide context in prompt
+  -o, --oracle                     Whether to generate oracle independently
 ```
 
 The `gen` command will generate tests for the selected project but will not fix them. It will then run the tests to collect data. The parameters are as follows:
@@ -93,6 +96,11 @@ The `gen` command will generate tests for the selected project but will not fix 
 `-w`：If the project contains multiple subprojects, specify the paths to the subprojects.
 
 `-i`：Specify this option to run in integration test mode, meaning all generated tests will be placed in the `tests` folder, and only public functions or methods will be tested.
+
+`-r`: Specify this option to ask LLM to generate tests for each condition chain.
+
+`-c`: Specify this option to provide context of the focal function to the LLM.
+
 
 ### fix
 
