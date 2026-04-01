@@ -1,3 +1,5 @@
+#![feature(rustc_private)]
+
 use call_chain::utils;
 use serde_json;
 use std::ffi::OsString;
@@ -94,7 +96,7 @@ fn current_crate() -> cargo_metadata::Package {
                     .expect("could not read current directory");
                 let package_manifest_directory = package_manifest_path
                     .parent()
-                    .expect("could not find parent directory of package manifest");
+                    .expect(format!("could not find parent directory of package manifest: {:?}", package_manifest_path).as_str());
                 package_manifest_directory == current_dir
             }
         })

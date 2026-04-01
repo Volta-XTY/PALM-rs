@@ -5,11 +5,9 @@ use super::sourceinfo::SourceInfo;
 use base62;
 use regex::Regex;
 use rustc_ast::token::CommentKind;
-use rustc_ast::AttrKind;
 use rustc_hir::def_id::CRATE_DEF_ID;
 use rustc_hir::intravisit::{self, Visitor};
 use rustc_hir::{self, BodyId, FnDecl};
-use rustc_middle::hir::map::Map;
 use rustc_middle::hir::nested_filter;
 use rustc_middle::mir::BasicBlocks;
 use rustc_middle::ty::TyCtxt;
@@ -46,18 +44,16 @@ pub struct VisitorData<'tcx> {
 pub struct HirVisitor<'tcx> {
     crate_dir: PathBuf,
     tcx: TyCtxt<'tcx>,
-    hir_map: Map<'tcx>,
     mod_infos: Vec<ModInfo>,
     result: Vec<VisitorData<'tcx>>,
     re: Regex,
 }
 
 impl<'tcx> HirVisitor<'tcx> {
-    pub fn new(crate_dir: PathBuf, tcx: TyCtxt<'tcx>, hir_map: Map<'tcx>) -> Self {
+    pub fn new(crate_dir: PathBuf, tcx: TyCtxt<'tcx>) -> Self {
         HirVisitor {
             crate_dir,
             tcx,
-            hir_map,
             mod_infos: Vec::new(),
             result: Vec::new(),
             re: Regex::new(r"\{impl#\d+\}").unwrap(),
@@ -87,8 +83,8 @@ impl<'tcx> HirVisitor<'tcx> {
 impl<'tcx> Visitor<'tcx> for HirVisitor<'tcx> {
     type NestedFilter = nested_filter::All;
 
-    fn nested_visit_map(&mut self) -> Self::Map {
-        self.hir_map
+    fn maybe_tcx(&mut self) -> Self::MaybeTyCtxt {
+        self.tcx
     }
 
     fn visit_mod(
@@ -105,7 +101,7 @@ impl<'tcx> Visitor<'tcx> for HirVisitor<'tcx> {
             name: module_name.clone(),
             loc: mod_source,
         });
-        intravisit::walk_mod(self, m, n);
+        intravisit::walk_mod(self, m);
         info!("Leaving module: {:?}", module_name);
         self.mod_infos.pop();
     }
@@ -143,9 +139,9 @@ impl<'tcx> Visitor<'tcx> for HirVisitor<'tcx> {
         let has_ret = matches!(_fd.output, rustc_hir::FnRetTy::Return(_));
 
         // Skip functions that are automatically derived
-        for parent in self.hir_map.parent_id_iter(b.hir_id) {
+        for parent in self.tcx.hir_parent_id_iter(b.hir_id) {
             // println!("parent: {:?}", parent);
-            let attrs = self.hir_map.attrs(parent);
+            let attrs = self.tcx.hir_attrs(parent);
             if attrs
                 .iter()
                 .any(|attr| attr.has_name(sym::automatically_derived))
@@ -170,7 +166,7 @@ impl<'tcx> Visitor<'tcx> for HirVisitor<'tcx> {
         let mut file = File::create(file_path).unwrap();
         file.write_all(code.as_bytes()).unwrap();
 
-        let hir = self.hir_map.body(b);
+        let hir = self.tcx.hir_body(b);
         let steal_mir = self.tcx.mir_built(id);
         if steal_mir.is_stolen() {
             error!("Skip because MIR has been stolen");
@@ -205,10 +201,10 @@ impl<'tcx> Visitor<'tcx> for HirVisitor<'tcx> {
 
         // get doc comments
         let hir_id = self.tcx.local_def_id_to_hir_id(id);
-        let attrs = self.hir_map.attrs(hir_id);
+        let attrs = self.tcx.hir_attrs(hir_id);
         let mut doc = String::new();
         for attr in attrs {
-            if let AttrKind::DocComment(kind, sym) = attr.kind {
+            if let Some((sym, kind)) = attr.doc_str_and_comment_kind() {
                 match kind {
                     CommentKind::Line => {
                         doc += &format!("///{}\n", sym.to_string());

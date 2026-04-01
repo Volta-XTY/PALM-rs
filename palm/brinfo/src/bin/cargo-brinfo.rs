@@ -1,3 +1,5 @@
+#![feature(rustc_private)]
+
 use brinfo::utils;
 use log::info;
 use serde_json;
@@ -75,10 +77,11 @@ fn current_crate() -> cargo_metadata::Package {
     if let Some(ref manifest_path) = manifest_path {
         cmd.manifest_path(manifest_path);
     }
-    let mut metadata = if let Ok(metadata) = cmd.exec() {
-        metadata
-    } else {
-        show_error("Could not obtain Cargo metadata; likely an ill-formed manifest".to_string());
+    let mut metadata = match cmd.exec() {
+        Ok(metadata) => { metadata },
+        Err(err) => {
+            show_error(format!("Could not obtain Cargo metadata; likely an ill-formed manifest\n${:?}\n{}", cmd.cargo_command(), err.to_string()));
+        }
     };
 
     let current_dir = std::env::current_dir();

@@ -3,7 +3,6 @@ use super::hirvisitor::{HirVisitor, VisitorData};
 use rustc_data_structures::graph::StartNode;
 use rustc_driver::Compilation;
 use rustc_interface::interface;
-use rustc_interface::Queries;
 use rustc_middle::mir::BasicBlock;
 use rustc_middle::ty::TyCtxt;
 use std::collections::BTreeMap;
@@ -37,12 +36,9 @@ impl rustc_driver::Callbacks for BrInfoCallbacks {
     fn after_expansion<'tcx>(
         &mut self,
         _compiler: &interface::Compiler,
-        _queries: &'tcx Queries<'tcx>,
+        _tcx: TyCtxt<'tcx>,
     ) -> Compilation {
-        _queries
-            .global_ctxt()
-            .unwrap()
-            .enter(|tcx| self.run_analysis(tcx));
+        self.run_analysis(_tcx);
 
         Compilation::Continue
     }
@@ -50,9 +46,8 @@ impl rustc_driver::Callbacks for BrInfoCallbacks {
 
 impl BrInfoCallbacks {
     fn run_analysis<'tcx, 'compiler>(&mut self, tcx: TyCtxt<'tcx>) {
-        let hir_map = tcx.hir();
-        let mut visitor = HirVisitor::new(self.crate_dir.clone(), tcx, hir_map);
-        hir_map.walk_toplevel_module(&mut visitor);
+        let mut visitor = HirVisitor::new(self.crate_dir.clone(), tcx);
+        tcx.hir_walk_toplevel_module(&mut visitor);
         let result = visitor.move_result();
 
         let mut ret: Vec<FnBlocks> = vec![];
@@ -119,7 +114,10 @@ impl BrInfoCallbacks {
         let mut name_map = BTreeMap::new();
         for mut block in ret {
             // info!("Start analysis for {}", block.id);
-            info!("Start analysis for {} with encoded name {}", block.name, block.encoded_name);
+            info!(
+                "Start analysis for {} with encoded name {}",
+                block.name, block.encoded_name
+            );
             block.mir_out(&self.crate_dir);
             block.dump_cfg_to_dot(&self.crate_dir);
             let result = block.iterative_dfs();

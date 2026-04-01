@@ -83,11 +83,15 @@ impl MyPath {
         original_path_string: &String,
         mod_context: &Rc<RefCell<ModContext>>,
         directly_use_tree: &mut MyPath,
+        depth: usize,
     ) -> bool {
         // println!("{}", self.to_string());
         // println!("{}", mod_context.borrow().get_mod_tree().to_string());
         // println!("{}", direct_name);
         // println!();
+        if depth > 50 {
+            return true;
+        }
         let mut crate_name: String = String::new();
         if mod_context.borrow().is_crate() {
             crate_name = mod_context.borrow().get_mod_name();
@@ -105,6 +109,7 @@ impl MyPath {
                     original_path_string,
                     mod_context,
                     directly_use_tree,
+                    depth + 1,
                 );
             } else {
                 *directly_use_tree =
@@ -114,6 +119,7 @@ impl MyPath {
                     original_path_string,
                     mod_context.borrow().get_crate(),
                     directly_use_tree,
+                    depth + 1,
                 );
             }
         } else if self.name == "super" {
@@ -127,6 +133,7 @@ impl MyPath {
                 original_path_string,
                 &ModContext::get_parent_recursively(mod_context),
                 directly_use_tree,
+                depth + 1,
             );
         } else if self.name == "self" {
             // println!("{}", self.to_string());
@@ -139,6 +146,7 @@ impl MyPath {
                 original_path_string,
                 mod_context,
                 directly_use_tree,
+                depth + 1,
             );
         } else {
             let pub_uses = mod_context.borrow().get_pub_use();
@@ -154,6 +162,7 @@ impl MyPath {
                                 &new_original_path_string,
                                 mod_context,
                                 directly_use_tree,
+                                depth + 1,
                             );
                         } else {
                             *directly_use_tree = MyPath::new(
@@ -164,6 +173,7 @@ impl MyPath {
                                 &new_original_path_string,
                                 mod_context,
                                 directly_use_tree,
+                                depth + 1,
                             );
                         }
                     }
@@ -179,6 +189,7 @@ impl MyPath {
                                 &new_original_path_string,
                                 mod_context,
                                 directly_use_tree,
+                                depth + 1,
                             );
                         } else {
                             *directly_use_tree = MyPath::new(
@@ -189,6 +200,7 @@ impl MyPath {
                                 &new_original_path_string,
                                 mod_context,
                                 directly_use_tree,
+                                depth + 1,
                             );
                         }
                     }
@@ -206,6 +218,7 @@ impl MyPath {
                             original_path_string,
                             sub_mod,
                             directly_use_tree,
+                            depth + 1,
                         );
                     }
                 }
@@ -225,6 +238,7 @@ impl MyPath {
                         original_path_string,
                         mod_context,
                         directly_use_tree,
+                        depth + 1,
                     );
                 } else {
                     *directly_use_tree = MyPath::new(&crate_name);
@@ -233,6 +247,7 @@ impl MyPath {
                         original_path_string,
                         mod_context.borrow().get_crate(),
                         directly_use_tree,
+                        depth + 1,
                     );
                 }
             }
@@ -387,6 +402,7 @@ impl Name {
                 &original_path_string,
                 mod_context,
                 &mut directly_use_tree,
+                0,
             ) {
                 self.import_name = directly_use_tree;
             }
@@ -411,6 +427,7 @@ impl Name {
                 &original_path_string,
                 mod_context,
                 &mut directly_use_tree,
+                0,
             ) {
                 self.import_name = directly_use_tree;
             }
@@ -1807,6 +1824,7 @@ impl UseTree {
             &original_path_string,
             mod_context,
             &mut directly_use_tree,
+            0,
         ) {
             self.use_tree = directly_use_tree;
         }

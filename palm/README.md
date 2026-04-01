@@ -2,16 +2,16 @@
 
 ## Prerequisites
 
-1. Install the Rust toolchain `nightly-2024-08-10`
+1. Install the Rust toolchain `nightly-2025-03-19`
 
     ```sh
-    rustup install nightly-2024-08-10
+    rustup install nightly-2025-03-19
     ```
 
 2. Add the required components
 
     ```sh
-    rustup component add --toolchain nightly-2024-08-10 rust-src rustc-dev llvm-tools-preview
+    rustup component add --toolchain nightly-2025-03-19 rust-src rustc-dev llvm-tools-preview
     ```
 
 3. Install [`cargo-llvm-cov`](https://github.com/taiki-e/cargo-llvm-cov): `cargo +stable install cargo-llvm-cov --locked`

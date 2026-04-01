@@ -5,7 +5,7 @@ use super::{
     TIMEOUT_DERIVE,
 };
 use crate::{
-    gen::LLM,
+    gene::LLM,
     types::{InsertKind, TestGenInfo},
     utils::{
         backup_file, cargo_check, delete_all_backups, has_backup, insert_test, restore_file,
@@ -37,7 +37,7 @@ use tokio::{
 static FIX_LOCK: OnceCell<Mutex<()>> = OnceCell::const_new();
 static FIX_TIMEOUT: u64 = 28800;
 
-async fn get_fixes_from_llm(prompt: &String, n: i32) -> Result<Vec<String>, Box<dyn Error + Send>> {
+async fn get_fixes_from_llm(prompt: &String, n: i32) -> Result<(Vec<String>, u32, u32), Box<dyn Error + Send>> {
     let llm = LLM::new().unwrap();
     let answers = llm.get_answer(&prompt, n as u8, false).await;
     answers
@@ -145,14 +145,14 @@ async fn compilation_fix_assistant_for_an_error(
     test_name: String,
     insert_kind: InsertKind,
     common: &Vec<String>,
-) -> Result<(Vec<ErrorMessage>, TestCode), ()> {
+) -> Result<(Vec<ErrorMessage>, TestCode, u32, u32), ()> {
     // let mut local_error_group: Vec<ErrorMessage> = Vec::new();
     // local_error_group.push(error_message.clone());
     let mut iterative_time = 0;
     let mut min_error_set = compile_error_set.clone();
     let mut min_error_content = test_code.clone();
     let mut min_set_num = min_error_set.len();
-    let mut max_time_to_iterative = 5;
+    let mut max_time_to_iterative = 2;
 
     let current_error = error_message;
     let rust_assistant_prompt_json_str = include_str!("../../res/rustassistant_prompt.json");
@@ -178,6 +178,8 @@ async fn compilation_fix_assistant_for_an_error(
 
     let lock = FIX_LOCK.get_or_init(|| async { Mutex::new(()) }).await;
     let mut retry = 0;
+    let mut completion_tokens = 0;
+    let mut prompt_tokens = 0;
 
     while iterative_time < max_time_to_iterative {
         iterative_time += 1;
@@ -185,7 +187,9 @@ async fn compilation_fix_assistant_for_an_error(
         // let request_choices_result = Err(());
         // let request_choices_result = read_to_string(work_path.join("fix_request.txt"));
         let mut request_choices: Vec<String> = Vec::new();
-        if let Ok(s) = request_choices_result {
+        if let Ok((s, usage_completion, usage_prompt)) = request_choices_result {
+            completion_tokens += usage_completion;
+            prompt_tokens += usage_prompt;
             request_choices = s;
             // request_choices = s.split("ChangeLog:").map(|s| s.to_string()).collect();
             // request_choices.remove(0);
@@ -295,7 +299,7 @@ async fn compilation_fix_assistant_for_an_error(
         // min_error_set = request_result[min_set_index].0.clone();
         // min_error_content = request_result[min_set_index].1.clone();
         if min_set_num == 0 {
-            return Ok((min_error_set, min_error_content));
+            return Ok((min_error_set, min_error_content, completion_tokens, prompt_tokens));
         }
 
         // let template = include_str!("../../res/code_template.json");
@@ -309,7 +313,7 @@ async fn compilation_fix_assistant_for_an_error(
         // insert_test(insert_kind, Path::new(&file_path), &mod_code);
         // }
     }
-    return Ok((min_error_set, min_error_content));
+    return Ok((min_error_set, min_error_content, completion_tokens, prompt_tokens));
 }
 
 async fn compilation_fix_assistant_for_one_fn(
@@ -341,6 +345,8 @@ async fn compilation_fix_assistant_for_one_fn(
     for fn_test in test_gen_info.get_tests_mut().iter_mut() {
         for answer in fn_test.get_answers_mut().iter_mut() {
             let mut common = answer.get_common().clone();
+            let mut completion_tokens = answer.get_completion_tokens();
+            let mut prompt_tokens = answer.get_prompt_tokens();
             common.push("".to_string());
             for chain_test in answer.get_tests_mut().iter_mut() {
                 for (num, test_code) in chain_test.codes.iter_mut().enumerate() {
@@ -389,6 +395,7 @@ async fn compilation_fix_assistant_for_one_fn(
                         // let mut already_rng: Vec<usize> = Vec::new();
                         while i < initial_error_num && compile_error_set.len() > 0 {
                             i += 1;
+                            info!("{}_{}", sig, i);
                             let random_num = rand::rng().random_range(0..compile_error_set.len());
                             // while already_rng.contains(&random_num) {
                             //     random_num = rand::thread_rng().gen_range(0..compile_error_set.len());
@@ -408,9 +415,11 @@ async fn compilation_fix_assistant_for_one_fn(
                                 &common,
                             )
                             .await;
-                            if let Ok((new_error_set, new_error_content)) = once_fix_result {
+                            if let Ok((new_error_set, new_error_content, usage_completion, usage_prompt)) = once_fix_result {
                                 compile_error_set = new_error_set;
                                 test_file_content = new_error_content;
+                                completion_tokens += usage_completion;
+                                prompt_tokens += usage_prompt;
                                 // }
                                 if compile_error_set.len() == 0 {
                                     break;
@@ -470,6 +479,8 @@ async fn compilation_fix_assistant_for_one_fn(
                     }
                 }
             }
+            answer.set_completion_tokens(completion_tokens);
+            answer.set_prompt_tokens(prompt_tokens);
         }
     }
     test_gen_info

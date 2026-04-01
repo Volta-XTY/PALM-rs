@@ -30,6 +30,8 @@ pub async fn gen_prefix(
     let llm = LLM::new().unwrap();
     let system_pt = &pt_info.system_pt;
     let static_pt = &pt_info.static_pt;
+    let mut completion_tokens = 0;
+    let mut prompt_tokens = 0;
 
     let mut user_pt = static_pt.clone() + &conds.join("");
     user_pt += "Here are the inferred test input conditions or ranges based on the provided preconditions and return values or types, for your reference:\n";
@@ -58,7 +60,10 @@ pub async fn gen_prefix(
             }
             let result = llm.fetch_answer(Some(&system_pt), &user_pt, 1, false).await;
             if result.is_ok() {
-                answers = Some(result.unwrap());
+                let (result_answers, usage_completion, usage_prompt) = result.unwrap();
+                completion_tokens += usage_completion;
+                prompt_tokens += usage_prompt;
+                answers = Some(result_answers);
                 break;
             }
             error!("{}. Retrying...", result.unwrap_err());
@@ -106,6 +111,8 @@ pub async fn gen_prefix(
                 prefixs.has_test_mod,
                 prefixs.common,
                 test_info_list,
+                completion_tokens,
+                prompt_tokens,
             ));
         }
         return Some(test_answer_list);

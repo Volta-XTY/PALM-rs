@@ -2,7 +2,7 @@ use async_openai::{
     config::OpenAIConfig,
     types::{
         ChatCompletionRequestMessage, ChatCompletionRequestSystemMessageArgs,
-        ChatCompletionRequestUserMessageArgs, CreateChatCompletionRequestArgs,
+         ChatCompletionRequestUserMessageArgs, CreateChatCompletionRequestArgs,
     },
     Client,
 };
@@ -33,7 +33,7 @@ impl LLM {
         user_pt: &str,
         n: u8,
         stream: bool,
-    ) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+    ) -> Result<(Vec<String>, u32, u32), Box<dyn std::error::Error>> {
         let config = OpenAIConfig::new()
             .with_api_base(&self.config.base)
             .with_api_key(&self.config.key);
@@ -60,11 +60,16 @@ impl LLM {
         };
         let request = CreateChatCompletionRequestArgs::default()
             .model(&self.config.model)
+            .max_tokens(10000_u32)
+            .temperature(1.0)
+            .top_p(0_f32)
+            .n(1)
+            .stream(false)
             .messages(messages)
-            .n(n)
-            .stream(stream)
             .build()?;
         let mut result;
+        let mut completion_tokens = 0;
+        let mut prompt_tokens = 0;
         if !stream {
             let response = client.chat().create(request).await?;
             result = response
@@ -72,6 +77,9 @@ impl LLM {
                 .into_iter()
                 .filter_map(|c| c.message.content)
                 .collect();
+            let usage = response.usage.unwrap();
+            completion_tokens += usage.completion_tokens;
+            prompt_tokens += usage.prompt_tokens;
         } else {
             result = vec!["".to_string(); n as usize];
             let mut stream = client.chat().create_stream(request).await?;
@@ -83,12 +91,15 @@ impl LLM {
                                 result[choice.index as usize] += &content;
                             }
                         }
+                        let usage = chunk.usage.unwrap();
+                        completion_tokens += usage.completion_tokens;
+                        prompt_tokens += usage.prompt_tokens;
                     }
                     Err(e) => return Err(Box::new(e)),
                 }
             }
         }
-        Ok(result)
+        Ok((result, completion_tokens, prompt_tokens))
     }
 
     pub async fn get_answer(
@@ -96,7 +107,7 @@ impl LLM {
         prompt: &str,
         n: u8,
         stream: bool,
-    ) -> Result<Vec<String>, Box<dyn std::error::Error + Send>> {
+    ) -> Result<(Vec<String>, u32, u32), Box<dyn std::error::Error + Send>> {
         let config = OpenAIConfig::new()
             .with_api_base(&self.config.base)
             .with_api_key(&self.config.key);
@@ -108,11 +119,16 @@ impl LLM {
             .content(prompt)
             .build()
             .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send>)?;
+        let mut completion_tokens = 0;
+        let mut prompt_tokens = 0;
         let request = CreateChatCompletionRequestArgs::default()
             .model(&self.config.model)
+            .max_tokens(10000_u32)
+            .temperature(1.0)
+            .top_p(0_f32)
+            .n(1)
+            .stream(false)
             .messages(vec![ChatCompletionRequestMessage::User(msg)])
-            .n(n)
-            .stream(stream)
             .build()
             .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send>)?;
         let mut result;
@@ -127,6 +143,9 @@ impl LLM {
                 .into_iter()
                 .filter_map(|c| c.message.content)
                 .collect();
+            let usage = response.usage.unwrap();
+            completion_tokens += usage.completion_tokens;
+            prompt_tokens += usage.prompt_tokens;
         } else {
             result = vec!["".to_string(); n as usize];
             let mut stream = client
@@ -142,12 +161,15 @@ impl LLM {
                                 result[choice.index as usize] += &content;
                             }
                         }
+                        let usage = chunk.usage.unwrap();
+                        completion_tokens += usage.completion_tokens;
+                        prompt_tokens += usage.prompt_tokens;
                     }
                     Err(e) => return Err(Box::new(e)),
                 }
             }
         }
-        Ok(result)
+        Ok((result, completion_tokens, prompt_tokens))
     }
 }
 
@@ -163,13 +185,13 @@ mod tests {
         let answers = llm
             .fetch_answer(Some(sys_pt), user_pt, 1, false)
             .await
-            .unwrap();
+            .unwrap().0;
         assert_eq!(answers.len(), 1);
         // println!("{:?}", answers);
         let answers = llm
             .fetch_answer(Some(sys_pt), user_pt, 2, true)
             .await
-            .unwrap();
+            .unwrap().0;
         assert_eq!(answers.len(), 2);
         // println!("{:?}", answers);
     }

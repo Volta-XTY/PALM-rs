@@ -7,19 +7,14 @@ use crate::{
     run::TIMEOUT_DERIVE,
     types::TestGenInfo,
     utils::{backup_file, delete_backup, insert_test, restore_file, target_clean},
+    run::run_all::{prepare_all_unit_tests_for_one_shot_run},
 };
 use log::{error, info};
 use quick_xml::{events::Event, Reader};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::HashMap,
-    env,
-    fs::{self, exists, File},
-    io::{BufReader, Write},
-    path::{Path, PathBuf},
-    process::{exit, Command},
-    time::SystemTime,
+    collections::HashMap, env, fmt::format, fs::{self, File, exists}, io::{BufReader, Write}, path::{Path, PathBuf}, process::{Command, exit}, time::{SystemTime, UNIX_EPOCH}
 };
 use std::{fs::create_dir_all, vec};
 use std::{fs::remove_file, io::Read};
@@ -48,7 +43,7 @@ pub fn run_test(
             .output()
             .expect("Failed to run tests");
     } else {
-        // println!("Generating coverage report...");
+        println!("Generating coverage report...{:?}{:?}", project_dir, work_path);
         let coverage_output = Command::new("cargo")
             .args([
                 "llvm-cov",
@@ -58,7 +53,7 @@ pub fn run_test(
                 "--cobertura",
                 "--output-path",
                 "coverage.xml",
-            ])
+            ]) // RUST_BACKTRACE=full cargo llvm-cov --tests --ignore-run-fail --branch --cobertura
             .current_dir(work_path)
             .output()
             .expect("Failed to generate coverage report");
@@ -292,6 +287,32 @@ fn dump_result_for_original_test_rate_infos(
             .as_bytes(),
     )
     .unwrap();
+}
+
+pub fn gen_test_rate_aggregated(project_dir: &Path, is_pre: bool) {
+    let test_gen_infos = get_test_gen_infos(project_dir, is_pre);
+
+    let manifest_path = project_dir.join("utgen/injected_tests_manifest.json");
+
+    let touched_files = prepare_all_unit_tests_for_one_shot_run(
+        project_dir,
+        &test_gen_infos,
+        Some(&manifest_path),
+    );
+
+    println!("All tests injected.");
+    println!("Now run coverage manually, for example:");
+    println!(
+        "  cd {} && cargo llvm-cov --tests --ignore-run-fail --branch --cobertura --output-path coverage.xml",
+        project_dir.display()
+    );
+    println!(
+        "  cd {} && cargo llvm-cov --tests --ignore-run-fail --branch --json --output-path coverage.json",
+        project_dir.display()
+    );
+    println!("After parsing coverage, call restore_all_injected_files(...).");
+
+    // keep `touched_files` somewhere, serialize if needed
 }
 
 pub fn gen_test_rate(project_dir: &Path, work_dir: &Path, integration: bool, is_pre: bool) {
@@ -804,7 +825,7 @@ fn gen_coverage_and_pass_rate(
                             mod_code.splice(pos..pos, common);
                             let sig = format!("fn test_{}_{:02}()", fn_name, num);
                             let mut fn_code =
-                                vec!["#[test]".to_string(), TIMEOUT_DERIVE.to_string()];
+                                vec!["#[test]".to_string()];
                             fn_code.extend(test.attrs.clone().iter().map(|attr| {
                                 if attr.contains("#[should_panic(") {
                                     return "#[should_panic]".to_string();
@@ -862,8 +883,10 @@ fn gen_coverage_and_pass_rate(
                                 }
                             }
                             if this_tests_run > 1 {
-                                error!("There are more than one running tests");
-                                exit(-1);
+                                panic!("There are more than one running tests");
+                                println!("{:#?}", run_test_output);
+                                has_oracles_run = false;
+                                this_tests_passed = 0;
                             }
                             if this_tests_run == 1 {
                                 has_oracles_run = true;
@@ -895,7 +918,7 @@ fn gen_coverage_and_pass_rate(
         if tests_run == 0 {
             let mut mod_code = code_template.clone();
             let sig = format!("fn test_{}()", fn_name,);
-            let mut fn_code = vec!["#[test]".to_string(), TIMEOUT_DERIVE.to_string()];
+            let mut fn_code = vec!["#[test]".to_string()];
             fn_code.push(sig);
             let empty_codes = vec!["{".to_string(), "}".to_string()];
             fn_code.extend(empty_codes.clone());
@@ -1093,7 +1116,7 @@ fn gen_one_codes_branchs(
 ) {
     let coverage_file_path = work_dir.join("coverage.json");
 
-    let mut file = File::open(&coverage_file_path).unwrap();
+    let mut file = File::open(&coverage_file_path).expect(format!("{}()", function_name).as_str());
     let mut contents = String::new();
     file.read_to_string(&mut contents).unwrap();
     let mut coverage_json: CoverageJson = serde_json::from_str(&contents).unwrap();
@@ -1177,7 +1200,7 @@ fn gen_codes_lines_and_branches_covered(
                                 mod_code.splice(pos..pos, common);
                                 let sig = format!("fn test_{}_{:02}()", fn_name, num);
                                 let mut fn_code =
-                                    vec!["#[test]".to_string(), TIMEOUT_DERIVE.to_string()];
+                                    vec!["#[test]".to_string()];
                                 fn_code.extend(test.attrs.clone().iter().map(|attr| {
                                     if attr.contains("#[should_panic(") {
                                         return "#[should_panic]".to_string();

@@ -163,7 +163,7 @@ impl CrateContext {
         file.write_all(format!("{:#?}", self).as_bytes()).unwrap();
     }
 
-    pub fn cout_all_mod_trees_in_on_file_for_test(&self, out_mod_trees: &mut HashSet<String>) {
+    pub fn cout_all_mod_trees_in_one_file_for_test(&self, out_mod_trees: &mut HashSet<String>) {
         let output_path = self.crate_path.join("focxt/mod_trees");
         fs::create_dir_all(&output_path).unwrap();
         let mut num = 0;

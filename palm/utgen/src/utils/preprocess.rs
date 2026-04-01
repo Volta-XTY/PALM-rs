@@ -36,46 +36,51 @@ pub fn comment_out_tests(dir: &Path) -> io::Result<()> {
     Ok(())
 }
 
-// fn is_test_module(attrs: &[Attribute]) -> bool {
-//     attrs.iter().any(|attr| {
-//         attr.path().is_ident("cfg")
-//             && attr
-//                 .meta
-//                 .require_list()
-//                 .is_ok_and(|list| list.tokens.to_string().contains("test"))
-//     })
-// }
+fn is_test_module(attrs: &[syn::Attribute]) -> bool {
+    attrs.iter().any(|attr| {
+        attr.path().is_ident("cfg")
+            && attr
+                .meta
+                .require_list()
+                .is_ok_and(|list| list.tokens.to_string().contains("test"))
+    })
+}
 
 struct TestCommenter {
-    // mods_pos: Vec<(usize, usize, usize, usize)>,
+    mods_pos: Vec<(usize, usize, usize, usize)>,
     functions_pos: Vec<(usize, usize, usize, usize)>,
 }
 
 impl TestCommenter {
     fn new() -> Self {
         Self {
-            // mods_pos: Vec::new(),
+            mods_pos: Vec::new(),
             functions_pos: Vec::new(),
         }
     }
 }
+fn is_test_like_attr(attr: &syn::Attribute) -> bool {
+    let path = attr.path();
 
+    path.is_ident("test")
+        || path.segments.last().is_some_and(|seg| seg.ident == "test")
+}
 impl<'ast> Visit<'ast> for TestCommenter {
-    // fn visit_item_mod(&mut self, i: &'ast syn::ItemMod) {
-    //     if is_test_module(&i.attrs) {
-    //         let span = i.span();
-    //         self.mods_pos.push((
-    //             span.start().line,
-    //             span.start().column,
-    //             span.end().line,
-    //             span.end().column,
-    //         ));
-    //     }
-    //     syn::visit::visit_item_mod(self, i);
-    // }
+    fn visit_item_mod(&mut self, i: &'ast syn::ItemMod) {
+        if is_test_module(&i.attrs) {
+            let span = i.span();
+            self.mods_pos.push((
+                span.start().line,
+                span.start().column,
+                span.end().line,
+                span.end().column,
+            ));
+        }
+        syn::visit::visit_item_mod(self, i);
+    }
 
     fn visit_item_fn(&mut self, i: &'ast syn::ItemFn) {
-        if i.attrs.iter().any(|attr| attr.path().is_ident("test")) {
+        if i.attrs.iter().any(is_test_like_attr) {
             let span = i.span();
             self.functions_pos.push((
                 span.start().line,
@@ -98,7 +103,7 @@ fn comment_out_tests_in_file(file_path: &Path) -> io::Result<()> {
     commenter.visit_file(&syntax);
 
     let mut lines: Vec<String> = src.lines().map(|s| s.to_string()).collect();
-    for (start_line, start_col, end_line, end_col) in commenter.functions_pos.into_iter().rev() {
+    for (start_line, start_col, end_line, end_col) in commenter.functions_pos.into_iter().rev().chain(commenter.mods_pos.into_iter()) {
         if start_line == end_line {
             let line = &mut lines[start_line - 1];
             let (before, target, after) = (
