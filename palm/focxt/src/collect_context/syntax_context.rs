@@ -1910,7 +1910,7 @@ impl SyntaxContext {
                         let directory_path = output_path.join("new_callsandtypes");
                         create_dir_all(&directory_path).unwrap();
                         let file_path = PathBuf::from(&directory_path)
-                            .join(format!("{}.json", complete_function_name.clone()));
+                            .join(format!("{}.json", encoded_name.clone()));
                         let mut file = File::create(&file_path).unwrap();
                         file.write_all(serde_json::to_string(&data).unwrap().as_bytes())
                             .unwrap();
@@ -1989,7 +1989,7 @@ impl SyntaxContext {
                             let directory_path = output_path.join("new_callsandtypes");
                             create_dir_all(&directory_path).unwrap();
                             let file_path = PathBuf::from(&directory_path)
-                                .join(format!("{}.json", complete_function_name.clone()));
+                                .join(format!("{}.json", encoded_name.clone()));
                             let mut file = File::create(&file_path).unwrap();
                             file.write_all(serde_json::to_string(&data).unwrap().as_bytes())
                                 .unwrap();
@@ -2042,7 +2042,7 @@ impl SyntaxContext {
                             let directory_path = output_path.join("new_callsandtypes");
                             create_dir_all(&directory_path).unwrap();
                             let file_path = PathBuf::from(&directory_path)
-                                .join(format!("{}.json", complete_function_name.clone()));
+                                .join(format!("{}.json", encoded_name.clone()));
                             let mut file = File::create(&file_path).unwrap();
                             file.write_all(serde_json::to_string(&data).unwrap().as_bytes())
                                 .unwrap();
@@ -2074,8 +2074,8 @@ impl SyntaxContext {
             );
             let complete_function_name = function_item.get_complete_name();
             if let Some(encoded_name) = encoded_name {
-                let call_file = output_path
-                    .join(String::from("new_callsandtypes/") + &complete_function_name + ".json");
+                let call_file =
+                    output_path.join(String::from("new_callsandtypes/") + &encoded_name + ".json");
                 // println!("{}", call_file.to_string_lossy());
                 let mut file = File::open(call_file);
                 match file {
@@ -2135,9 +2135,8 @@ impl SyntaxContext {
                 );
                 let complete_function_name = function_item.get_complete_name();
                 if let Some(encoded_name) = encoded_name {
-                    let call_file = output_path.join(
-                        String::from("new_callsandtypes/") + &complete_function_name + ".json",
-                    );
+                    let call_file = output_path
+                        .join(String::from("new_callsandtypes/") + &encoded_name + ".json");
                     let mut file = File::open(call_file);
                     match file {
                         Ok(mut file) => {
@@ -2220,9 +2219,8 @@ impl SyntaxContext {
                 );
                 let complete_function_name = function_item.get_complete_name();
                 if let Some(encoded_name) = encoded_name {
-                    let call_file = output_path.join(
-                        String::from("new_callsandtypes/") + &complete_function_name + ".json",
-                    );
+                    let call_file = output_path
+                        .join(String::from("new_callsandtypes/") + &encoded_name + ".json");
                     let mut file = File::open(call_file);
                     match file {
                         Ok(mut file) => {

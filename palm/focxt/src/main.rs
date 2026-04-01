@@ -1,3 +1,5 @@
+#![feature(rustc_private)]
+
 use std::{
     collections::{HashMap, HashSet},
     fs::{self, File},
@@ -43,7 +45,7 @@ fn main() {
     crate_context.change_all_names();
 
     let mut mod_trees: HashSet<String> = HashSet::new();
-    crate_context.cout_all_mod_trees_in_on_file_for_test(&mut mod_trees);
+    crate_context.cout_all_mod_trees_in_one_file_for_test(&mut mod_trees);
     let mut mod_trees_vec: Vec<String> = Vec::new();
     for mod_tree in mod_trees.iter() {
         mod_trees_vec.push(mod_tree.clone());

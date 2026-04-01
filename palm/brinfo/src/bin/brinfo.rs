@@ -9,8 +9,6 @@ extern crate rustc_session;
 
 use brinfo::{analysis, utils};
 use log::info;
-use rustc_errors::emitter::HumanReadableErrorType;
-use rustc_errors::ColorConfig;
 use rustc_session::config::ErrorOutputType;
 use rustc_session::EarlyDiagCtxt;
 use simplelog::{ColorChoice, ConfigBuilder, LevelFilter, TermLogger, TerminalMode};
@@ -53,14 +51,11 @@ fn main() {
 
         // If this environment variable is set, we behave just like the real rustc
         if env::var_os("BRINFO_BE_RUSTC").is_some() {
-            let early_diag_ctxt: EarlyDiagCtxt = EarlyDiagCtxt::new(
-                ErrorOutputType::HumanReadable(HumanReadableErrorType::Default, ColorConfig::Auto),
-            );
+            let early_diag_ctxt: EarlyDiagCtxt = EarlyDiagCtxt::new(ErrorOutputType::default());
             rustc_driver::init_rustc_env_logger(&early_diag_ctxt);
             // We cannot use `rustc_driver::main` as we need to adjust the CLI arguments.
             let mut callbacks = rustc_driver::TimePassesCallbacks::default();
-            let run_compiler = rustc_driver::RunCompiler::new(&rustc_args, &mut callbacks);
-            run_compiler.run()
+            rustc_driver::run_compiler(&rustc_args, &mut callbacks);
         } else {
             let always_encode_mir = "-Zalways_encode_mir";
             if !rustc_args.iter().any(|e| e == always_encode_mir) {
@@ -77,8 +72,7 @@ fn main() {
 
             let mut callbacks = analysis::callback::BrInfoCallbacks::new(crate_dir);
 
-            let run_compiler = rustc_driver::RunCompiler::new(&rustc_args, &mut callbacks);
-            run_compiler.run()
+            rustc_driver::run_compiler(&rustc_args, &mut callbacks);
         }
     });
 

@@ -1,6 +1,7 @@
 use clap::{Args, Parser, Subcommand};
 use log::info;
 use utgen::{comment_out_tests, gen_test_rate, gen_tests_project, llm_fix, rename_tests_to_bak};
+use utgen::gen_test_rate_aggregated;
 use simplelog::{ColorChoice, ConfigBuilder, LevelFilter, TermLogger, TerminalMode};
 use std::env;
 use std::path::PathBuf;
@@ -171,6 +172,7 @@ async fn main() {
             for work_dir in work_dirs.iter() {
                 llm_fix(project_dir.clone(), work_dir.clone()).await;
             }
+            //gen_test_rate_aggregated(&project_dir, false);
             for work_dir in work_dirs.iter() {
                 gen_test_rate(&project_dir, &work_dir, false, false);
             }

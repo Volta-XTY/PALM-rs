@@ -393,7 +393,10 @@ impl<'tcx> BranchVisitor<'tcx> {
         // println!("Type of {} is {:?}", pat_source.get_string(), pat_ty);
         let pat_kind = self.resolve_pat_kind(pat);
         match pat_kind {
-            rustc_hir::PatKind::Path(qpath)
+            rustc_hir::PatKind::Expr(&rustc_hir::PatExpr {
+                kind: rustc_hir::PatExprKind::Path(qpath),
+                ..
+            })
             | rustc_hir::PatKind::TupleStruct(qpath, _, _)
             | rustc_hir::PatKind::Struct(qpath, _, _) => match qpath {
                 rustc_hir::QPath::Resolved(_, path) => {
@@ -526,20 +529,29 @@ impl<'tcx> BranchVisitor<'tcx> {
                     let field_pat_kind = self.resolve_pat_kind(&field.pat);
                     let mut mir_const: Option<u128> = None;
                     match field_pat_kind {
-                        rustc_hir::PatKind::Lit(pat_lit) => match pat_lit.kind {
-                            rustc_hir::ExprKind::Lit(expr_lit) => match expr_lit.node {
+                        rustc_hir::PatKind::Expr(pat_expr) => match pat_expr.kind {
+                            rustc_hir::PatExprKind::Lit {
+                                lit: expr_lit,
+                                negated,
+                            } => match expr_lit.node {
                                 rustc_ast::LitKind::Byte(_)
                                 | rustc_ast::LitKind::Char(_)
                                 | rustc_ast::LitKind::Int(_, _) => {
                                     // let lit_str =
                                     //     SourceInfo::from_span(expr_lit.span, &self.span_re)
                                     //         .get_string();
-                                    let lit_ty = self.typeck_res.node_type(pat_lit.hir_id);
-                                    let param_ty = ty::ParamEnv::reveal_all().and(lit_ty);
-                                    let width = self.tcx.layout_of(param_ty).unwrap().size;
+                                    let lit_ty = self.typeck_res.node_type(pat_expr.hir_id);
+                                    let width = self
+                                        .tcx
+                                        .layout_of(
+                                            ty::TypingEnv::fully_monomorphized()
+                                                .as_query_input(lit_ty),
+                                        )
+                                        .unwrap()
+                                        .size;
                                     // println!("Field type layout: {:?}", layout);
                                     if let Ok(n) =
-                                        self.lit_to_constant(&expr_lit.node, width, false)
+                                        self.lit_to_constant(&expr_lit.node, width, negated)
                                     {
                                         mir_const = Some(n);
                                     } else {
@@ -549,37 +561,6 @@ impl<'tcx> BranchVisitor<'tcx> {
                                 }
                                 _ => {}
                             },
-                            rustc_hir::ExprKind::Unary(op, expr) => {
-                                assert_eq!(op, rustc_hir::UnOp::Neg);
-                                if let rustc_hir::ExprKind::Lit(expr_lit) = expr.kind {
-                                    match expr_lit.node {
-                                        rustc_ast::LitKind::Int(_, _) => {
-                                            // let lit_str =
-                                            //     SourceInfo::from_span(expr_lit.span, &self.span_re)
-                                            //         .get_string();
-                                            let lit_ty = self.typeck_res.node_type(pat_lit.hir_id);
-                                            let param_ty = ty::ParamEnv::reveal_all().and(lit_ty);
-                                            let width = self.tcx.layout_of(param_ty).unwrap().size;
-                                            // println!("Field type layout: {:?}", layout);
-                                            if let Ok(n) =
-                                                self.lit_to_constant(&expr_lit.node, width, true)
-                                            {
-                                                mir_const = Some(n);
-                                            } else {
-                                                return Err(());
-                                            }
-                                            // println!(
-                                            //     "Literal: -{}, mir_const: {:?}",
-                                            //     lit_str, mir_const
-                                            // );
-                                        }
-                                        _ => {}
-                                    }
-                                } else {
-                                    error!("expr.kind is: {:?}", expr.kind);
-                                    return Err(());
-                                }
-                            }
                             _ => {}
                         },
                         _ => {}
@@ -609,20 +590,29 @@ impl<'tcx> BranchVisitor<'tcx> {
                     let field_pat_kind = self.resolve_pat_kind(field);
                     let mut mir_const: Option<u128> = None;
                     match field_pat_kind {
-                        rustc_hir::PatKind::Lit(pat_lit) => match pat_lit.kind {
-                            rustc_hir::ExprKind::Lit(expr_lit) => match expr_lit.node {
+                        rustc_hir::PatKind::Expr(pat_expr) => match pat_expr.kind {
+                            rustc_hir::PatExprKind::Lit {
+                                lit: expr_lit,
+                                negated,
+                            } => match expr_lit.node {
                                 rustc_ast::LitKind::Byte(_)
                                 | rustc_ast::LitKind::Char(_)
                                 | rustc_ast::LitKind::Int(_, _) => {
                                     // let lit_str =
                                     //     SourceInfo::from_span(expr_lit.span, &self.span_re)
                                     //         .get_string();
-                                    let lit_ty = self.typeck_res.node_type(pat_lit.hir_id);
-                                    let param_ty = ty::ParamEnv::reveal_all().and(lit_ty);
-                                    let width = self.tcx.layout_of(param_ty).unwrap().size;
+                                    let lit_ty = self.typeck_res.node_type(pat_expr.hir_id);
+                                    let width = self
+                                        .tcx
+                                        .layout_of(
+                                            ty::TypingEnv::fully_monomorphized()
+                                                .as_query_input(lit_ty),
+                                        )
+                                        .unwrap()
+                                        .size;
                                     // println!("Field type layout: {:?}", layout);
                                     if let Ok(n) =
-                                        self.lit_to_constant(&expr_lit.node, width, false)
+                                        self.lit_to_constant(&expr_lit.node, width, negated)
                                     {
                                         mir_const = Some(n);
                                     } else {
@@ -632,37 +622,6 @@ impl<'tcx> BranchVisitor<'tcx> {
                                 }
                                 _ => {}
                             },
-                            rustc_hir::ExprKind::Unary(op, expr) => {
-                                assert_eq!(op, rustc_hir::UnOp::Neg);
-                                if let rustc_hir::ExprKind::Lit(expr_lit) = expr.kind {
-                                    match expr_lit.node {
-                                        rustc_ast::LitKind::Int(_, _) => {
-                                            // let lit_str =
-                                            //     SourceInfo::from_span(expr_lit.span, &self.span_re)
-                                            //         .get_string();
-                                            let lit_ty = self.typeck_res.node_type(pat_lit.hir_id);
-                                            let param_ty = ty::ParamEnv::reveal_all().and(lit_ty);
-                                            let width = self.tcx.layout_of(param_ty).unwrap().size;
-                                            // println!("Field type layout: {:?}", layout);
-                                            if let Ok(n) =
-                                                self.lit_to_constant(&expr_lit.node, width, true)
-                                            {
-                                                mir_const = Some(n);
-                                            } else {
-                                                return Err(());
-                                            }
-                                            // println!(
-                                            //     "Literal: -{}, mir_const: {:?}",
-                                            //     lit_str, mir_const
-                                            // );
-                                        }
-                                        _ => {}
-                                    }
-                                } else {
-                                    error!("expr.kind is: {:?}", expr.kind);
-                                    return Err(());
-                                }
-                            }
                             _ => {}
                         },
                         _ => {}
@@ -767,20 +726,29 @@ impl<'tcx> BranchVisitor<'tcx> {
                     let field_pat_kind = self.resolve_pat_kind(field);
                     let mut mir_const: Option<u128> = None;
                     match field_pat_kind {
-                        rustc_hir::PatKind::Lit(pat_lit) => match pat_lit.kind {
-                            rustc_hir::ExprKind::Lit(expr_lit) => match expr_lit.node {
+                        rustc_hir::PatKind::Expr(pat_expr) => match pat_expr.kind {
+                            rustc_hir::PatExprKind::Lit {
+                                lit: expr_lit,
+                                negated,
+                            } => match expr_lit.node {
                                 rustc_ast::LitKind::Byte(_)
                                 | rustc_ast::LitKind::Char(_)
                                 | rustc_ast::LitKind::Int(_, _) => {
                                     // let lit_str =
                                     //     SourceInfo::from_span(expr_lit.span, &self.span_re)
                                     //         .get_string();
-                                    let lit_ty = self.typeck_res.node_type(pat_lit.hir_id);
-                                    let param_ty = ty::ParamEnv::reveal_all().and(lit_ty);
-                                    let width = self.tcx.layout_of(param_ty).unwrap().size;
+                                    let lit_ty = self.typeck_res.node_type(pat_expr.hir_id);
+                                    let width = self
+                                        .tcx
+                                        .layout_of(
+                                            ty::TypingEnv::fully_monomorphized()
+                                                .as_query_input(lit_ty),
+                                        )
+                                        .unwrap()
+                                        .size;
                                     // println!("Field type layout: {:?}", layout);
                                     if let Ok(n) =
-                                        self.lit_to_constant(&expr_lit.node, width, false)
+                                        self.lit_to_constant(&expr_lit.node, width, negated)
                                     {
                                         mir_const = Some(n);
                                     } else {
@@ -790,37 +758,6 @@ impl<'tcx> BranchVisitor<'tcx> {
                                 }
                                 _ => {}
                             },
-                            rustc_hir::ExprKind::Unary(op, expr) => {
-                                assert_eq!(op, rustc_hir::UnOp::Neg);
-                                if let rustc_hir::ExprKind::Lit(expr_lit) = expr.kind {
-                                    match expr_lit.node {
-                                        rustc_ast::LitKind::Int(_, _) => {
-                                            // let lit_str =
-                                            //     SourceInfo::from_span(expr_lit.span, &self.span_re)
-                                            //         .get_string();
-                                            let lit_ty = self.typeck_res.node_type(pat_lit.hir_id);
-                                            let param_ty = ty::ParamEnv::reveal_all().and(lit_ty);
-                                            let width = self.tcx.layout_of(param_ty).unwrap().size;
-                                            // println!("Field type layout: {:?}", layout);
-                                            if let Ok(n) =
-                                                self.lit_to_constant(&expr_lit.node, width, true)
-                                            {
-                                                mir_const = Some(n);
-                                            } else {
-                                                return Err(());
-                                            }
-                                            // println!(
-                                            //     "Literal: -{}, mir_const: {:?}",
-                                            //     lit_str, mir_const
-                                            // );
-                                        }
-                                        _ => {}
-                                    }
-                                } else {
-                                    error!("expr.kind is: {:?}", expr.kind);
-                                    return Err(());
-                                }
-                            }
                             _ => {}
                         },
                         _ => {}
@@ -872,20 +809,28 @@ impl<'tcx> BranchVisitor<'tcx> {
                     }
                 }
             }
-            rustc_hir::PatKind::Lit(pat_lit) => {
+            rustc_hir::PatKind::Expr(pat_expr) => {
                 let mut mir_const: Option<u128> = None;
-                match pat_lit.kind {
-                    rustc_hir::ExprKind::Lit(expr_lit) => match expr_lit.node {
+                match pat_expr.kind {
+                    rustc_hir::PatExprKind::Lit {
+                        lit: expr_lit,
+                        negated,
+                    } => match expr_lit.node {
                         rustc_ast::LitKind::Byte(_)
                         | rustc_ast::LitKind::Char(_)
                         | rustc_ast::LitKind::Int(_, _) => {
                             // let lit_str =
                             //     SourceInfo::from_span(expr_lit.span, &self.span_re).get_string();
-                            let lit_ty = self.typeck_res.node_type(pat_lit.hir_id);
-                            let param_ty = ty::ParamEnv::reveal_all().and(lit_ty);
-                            let width = self.tcx.layout_of(param_ty).unwrap().size;
+                            let lit_ty = self.typeck_res.node_type(pat_expr.hir_id);
+                            let width = self
+                                .tcx
+                                .layout_of(
+                                    ty::TypingEnv::fully_monomorphized().as_query_input(lit_ty),
+                                )
+                                .unwrap()
+                                .size;
                             // println!("Field type layout: {:?}", layout);
-                            if let Ok(n) = self.lit_to_constant(&expr_lit.node, width, false) {
+                            if let Ok(n) = self.lit_to_constant(&expr_lit.node, width, negated) {
                                 mir_const = Some(n);
                             } else {
                                 return Err(());
@@ -894,33 +839,6 @@ impl<'tcx> BranchVisitor<'tcx> {
                         }
                         _ => {}
                     },
-                    rustc_hir::ExprKind::Unary(op, expr) => {
-                        assert_eq!(op, rustc_hir::UnOp::Neg);
-                        if let rustc_hir::ExprKind::Lit(expr_lit) = expr.kind {
-                            match expr_lit.node {
-                                rustc_ast::LitKind::Int(_, _) => {
-                                    // let lit_str =
-                                    //     SourceInfo::from_span(expr_lit.span, &self.span_re)
-                                    //         .get_string();
-                                    let lit_ty = self.typeck_res.node_type(pat_lit.hir_id);
-                                    let param_ty = ty::ParamEnv::reveal_all().and(lit_ty);
-                                    let width = self.tcx.layout_of(param_ty).unwrap().size;
-                                    // println!("Field type layout: {:?}", layout);
-                                    if let Ok(n) = self.lit_to_constant(&expr_lit.node, width, true)
-                                    {
-                                        mir_const = Some(n);
-                                    } else {
-                                        return Err(());
-                                    }
-                                    // println!("Literal: -{}, mir_const: {:?}", lit_str, mir_const);
-                                }
-                                _ => {}
-                            }
-                        } else {
-                            error!("expr.kind is: {:?}", expr.kind);
-                            return Err(());
-                        }
-                    }
                     _ => {}
                 }
                 let patt = Patt {

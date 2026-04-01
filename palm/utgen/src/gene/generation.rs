@@ -110,6 +110,8 @@ async fn gen_tests_cot(
     .unwrap();
 
     let mut chain_test_info_list = vec![];
+    let mut completion_tokens = 0;
+    let mut prompt_tokens = 0;
 
     if requirement {
         for cond_chain in &brdata.cond_chains {
@@ -145,7 +147,9 @@ async fn gen_tests_cot(
             if input_range.is_none() {
                 return None;
             }
-            let input_range = input_range.unwrap();
+            let (input_range, usage_completion, usage_prompt) = input_range.unwrap();
+            completion_tokens += usage_completion;
+            prompt_tokens += usage_prompt;
 
             let input_answer_path = answer_dir.join(format!("{:03}/input.txt", id));
             fs::create_dir_all(input_answer_path.parent().unwrap()).unwrap();
@@ -176,8 +180,10 @@ async fn gen_tests_cot(
                     code.extend(test_info.prefix_func());
                     let oracle = gen_oracle(&oracle_pt_info, &cond_prompt, &code).await;
                     if oracle.is_some() {
-                        let oracles = oracle
-                            .unwrap()
+                        let (oracles , usage_completion, usage_prompt)= oracle.unwrap();
+                        completion_tokens += usage_completion;
+                        prompt_tokens += usage_prompt;
+                        let oracles = oracles
                             .trim()
                             .split("\n")
                             .map(|s| format!("    {}", s.trim()))
@@ -196,7 +202,7 @@ async fn gen_tests_cot(
             .unwrap();
 
             let chain_test_info =
-                ChainTestInfo::new(cond_chain.id, cond_prompt, input_range, test_answer_list);
+                ChainTestInfo::new(cond_chain.id, cond_prompt, input_range, completion_tokens, prompt_tokens, test_answer_list);
             chain_test_info_list.push(chain_test_info);
         }
     } else {
@@ -207,7 +213,9 @@ async fn gen_tests_cot(
         if input_range.is_none() {
             return None;
         }
-        let input_range = input_range.unwrap();
+        let (input_range , usage_completion, usage_prompt)= input_range.unwrap();
+        completion_tokens += usage_completion;
+        prompt_tokens += usage_prompt;
 
         let input_answer_path = answer_dir.join(format!("{:03}/input.txt", id));
         fs::create_dir_all(input_answer_path.parent().unwrap()).unwrap();
@@ -238,8 +246,10 @@ async fn gen_tests_cot(
                 code.extend(test_info.prefix_func());
                 let oracle = gen_oracle(&oracle_pt_info, &vec![], &code).await;
                 if oracle.is_some() {
-                    let oracles = oracle
-                        .unwrap()
+                    let (oracles , usage_completion, usage_prompt) = oracle.unwrap();
+                    completion_tokens += usage_completion;
+                    prompt_tokens += usage_prompt;
+                    let oracles = oracles
                         .trim()
                         .split("\n")
                         .map(|s| format!("    {}", s.trim()))
@@ -257,7 +267,7 @@ async fn gen_tests_cot(
         )
         .unwrap();
 
-        let chain_test_info = ChainTestInfo::new(id, vec![], input_range, test_answer_list);
+        let chain_test_info = ChainTestInfo::new(id, vec![], input_range, completion_tokens, prompt_tokens, test_answer_list);
         chain_test_info_list.push(chain_test_info);
     }
 
@@ -355,7 +365,7 @@ async fn gen_full_tests(
             let test_answer_list = test_answer_list.unwrap();
 
             let chain_test_info =
-                ChainTestInfo::new(id, cond_prompt, String::new(), test_answer_list);
+                ChainTestInfo::new(id, cond_prompt, String::new(), 0, 0, test_answer_list);
             chain_test_info_list.push(chain_test_info);
         }
     } else {
@@ -377,7 +387,7 @@ async fn gen_full_tests(
         }
         let test_answer_list = test_answer_list.unwrap();
 
-        let chain_test_info = ChainTestInfo::new(id, vec![], String::new(), test_answer_list);
+        let chain_test_info = ChainTestInfo::new(id, vec![], String::new(), 0, 0, test_answer_list);
         chain_test_info_list.push(chain_test_info);
     }
 

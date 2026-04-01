@@ -140,6 +140,8 @@ pub struct ChainTestInfo {
     chain_id: usize,
     prompt_conds: Vec<String>,
     input_infer: String,
+    input_infer_completion_tokens: u32,
+    input_infer_prompt_tokens: u32,
     answers: Vec<ChainTestAnswer>,
 }
 
@@ -148,12 +150,16 @@ impl ChainTestInfo {
         chain_id: usize,
         prompt_conds: Vec<String>,
         input_infer: String,
+        input_infer_completion_tokens: u32,
+        input_infer_prompt_tokens: u32,
         answers: Vec<ChainTestAnswer>,
     ) -> ChainTestInfo {
         ChainTestInfo {
             chain_id,
             prompt_conds,
             input_infer,
+            input_infer_completion_tokens,
+            input_infer_prompt_tokens,
             answers,
         }
     }
@@ -181,6 +187,8 @@ pub struct ChainTestAnswer {
     has_test_mod: bool,
     common: Vec<String>,
     chain_tests: Vec<TestInfo>,
+    completion_tokens: u32,
+    prompt_tokens: u32,
 }
 
 impl ChainTestAnswer {
@@ -189,12 +197,16 @@ impl ChainTestAnswer {
         has_test_mod: bool,
         common: Vec<String>,
         chain_tests: Vec<TestInfo>,
+        completion_tokens: u32,
+        prompt_tokens: u32,
     ) -> ChainTestAnswer {
         ChainTestAnswer {
             uses,
             has_test_mod,
             common,
             chain_tests,
+            completion_tokens,
+            prompt_tokens,
         }
     }
 
@@ -220,6 +232,22 @@ impl ChainTestAnswer {
 
     pub fn clear_common(&mut self) {
         self.common.clear();
+    }
+
+    pub fn get_completion_tokens(&self) -> u32 {
+        self.completion_tokens
+    }
+
+    pub fn set_completion_tokens(&mut self, completion_tokens: u32) {
+        self.completion_tokens = completion_tokens;
+    }
+
+    pub fn get_prompt_tokens(&self) -> u32 {
+        self.prompt_tokens
+    }
+
+    pub fn set_prompt_tokens(&mut self, prompt_tokens: u32) {
+        self.prompt_tokens = prompt_tokens;
     }
 }
 

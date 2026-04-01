@@ -1,6 +1,5 @@
 use rustc_driver::Compilation;
 use rustc_interface::interface;
-use rustc_interface::Queries;
 use rustc_middle::mir::Operand;
 use rustc_middle::mir::TerminatorKind;
 use rustc_middle::ty::GenericArgKind;
@@ -44,12 +43,9 @@ impl rustc_driver::Callbacks for CallChainCallbacks {
     fn after_expansion<'tcx>(
         &mut self,
         _compiler: &interface::Compiler,
-        _queries: &'tcx Queries<'tcx>,
+        _tcx: TyCtxt<'tcx>,
     ) -> Compilation {
-        _queries
-            .global_ctxt()
-            .unwrap()
-            .enter(|tcx| self.run_analysis(tcx));
+        self.run_analysis(_tcx);
 
         Compilation::Continue
     }
@@ -94,10 +90,9 @@ fn collect_subtypes<'tcx>(ty: Ty<'tcx>, tcx: TyCtxt<'tcx>, result: &mut HashSet<
 
 impl CallChainCallbacks {
     fn run_analysis<'tcx, 'compiler>(&mut self, tcx: TyCtxt<'tcx>) {
-        let hir_map = tcx.hir();
-        let mut visitor = HirVisitor::new(tcx, hir_map);
+        let mut visitor = HirVisitor::new(tcx);
         // hir_map.visit_all_item_likes_in_crate(&mut visitor);
-        hir_map.walk_toplevel_module(&mut visitor);
+        tcx.hir_walk_toplevel_module(&mut visitor);
         let result = visitor.move_result();
         let mut impl_informations: Vec<ImplInformation> = Vec::new();
         for data in result {

@@ -33,7 +33,7 @@ pub fn backup_file(path: &Path) {
             .to_str()
             .unwrap_or_default()
     ));
-    fs::copy(path, &backup_path).unwrap();
+    fs::copy(path, &backup_path).expect(format!("{:?}", path).as_str());
 }
 
 pub fn restore_file(path: &Path) {

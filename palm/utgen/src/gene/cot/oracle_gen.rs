@@ -10,12 +10,22 @@ fn postprocess(inputs: &mut Vec<String>) {
     }
 }
 
-pub async fn gen_input_range(pt_info: &Prompt, conds: &Vec<String>) -> Option<String> {
+pub async fn gen_oracle(
+    // work_dir: &Path,
+    pt_info: &Prompt,
+    conds: &Vec<String>,
+    code: &Vec<String>,
+) -> Option<(String, u32, u32)> {
     let llm = LLM::new().unwrap();
     let system_pt = &pt_info.system_pt;
     let static_pt = &pt_info.static_pt;
+    let mut completion_tokens = 0;
+    let mut prompt_tokens = 0;
 
-    let user_pt = static_pt.clone() + &conds.join("");
+    let mut user_pt = static_pt.clone() + &conds.join("");
+    user_pt +=
+        "Here is the test function code. You should generate the corresponding test oracles for it:\n";
+    user_pt += &code.join("\n");
     let mut retry = 0;
     let mut answers = None;
     while retry < 3 {
@@ -28,7 +38,10 @@ pub async fn gen_input_range(pt_info: &Prompt, conds: &Vec<String>) -> Option<St
         }
         let result = llm.fetch_answer(Some(&system_pt), &user_pt, 1, false).await;
         if result.is_ok() {
-            answers = Some(result.unwrap());
+            let (result_answers, usage_completion, usage_prompt) = result.unwrap();
+            completion_tokens += usage_completion;
+            prompt_tokens += usage_prompt;
+            answers = Some(result_answers);
             break;
         }
         error!("{}. Retrying...", result.unwrap_err());
@@ -39,15 +52,9 @@ pub async fn gen_input_range(pt_info: &Prompt, conds: &Vec<String>) -> Option<St
         return None;
     }
     let mut answers = answers.unwrap();
-    assert!(answers.len() == 1);
 
     postprocess(&mut answers);
     // info!("Answers: {:?}", answers);
 
-    let mut answer = answers.pop().unwrap();
-    if !answer.ends_with('\n') {
-        answer.push('\n');
-    }
-
-    Some(answer)
+    Some((answers[0].clone(), completion_tokens, prompt_tokens))
 }
